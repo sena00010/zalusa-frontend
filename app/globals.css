@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f9ff;
+  --foreground: #0b1220;
 }
 
 @theme inline {
@@ -10,17 +10,138 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --radius-sm: 5px;
+  --radius-md: 5px;
+  --radius-lg: 5px;
+
+  --color-surface: #ffffff;
+  --color-surface-2: #f2f6ff;
+  --color-border: #e6ecff;
+
+  --color-muted: #64748b;
+  --color-muted-2: #94a3b8;
+
+  /* Brand (blue/indigo) */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe8ff;
+  --color-brand-200: #b8d2ff;
+  --color-brand-300: #8fb0ff;
+  --color-brand-400: #5b86ff;
+  --color-brand-500: #3d6bff;
+  --color-brand-600: #2d5bff;
+  --color-brand-700: #2247e6;
+  --color-brand-800: #1d3cc2;
+  --color-brand-900: #152b8a;
+  --color-brand-950: #0a1a5e;
+
+  /* Accent (lime/yellow-green) */
+  --color-accent-400: #d7ff4d;
+  --color-accent-500: #c7ff1f;
+  --color-accent-600: #b4f000;
+
+  /* Extra palettes */
+  --color-success-50: #ecfdf5;
+  --color-success-600: #16a34a;
+  --color-warning-50: #fffbeb;
+  --color-warning-600: #d97706;
+  --color-danger-50: #fef2f2;
+  --color-danger-600: #dc2626;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #050816;
+    --foreground: #eef2ff;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+    Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Masaüstü ve laptop ekranları için (1024px ve üzeri) %85 zoom */
+@media (min-width: 1024px) {
+  html {
+    zoom: 0.85; /* %80 çok küçük geldiyse diye %85 olarak güncellendi */
+  }
+}
+
+@keyframes zalusaGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.zalusa-animated-gradient {
+  background-size: 200% 200%;
+  animation: zalusaGradientShift 9s ease-in-out infinite;
+}
+
+@keyframes zalusaFloatA {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(6deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+@keyframes zalusaFloatB {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, 14px, 0) rotate(-5deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+}
+
+@keyframes zalusaDrift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(14px, -8px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.zalusa-float-a {
+  animation: zalusaFloatA 10s ease-in-out infinite;
+}
+
+.zalusa-float-b {
+  animation: zalusaFloatB 12s ease-in-out infinite;
+}
+
+.zalusa-drift {
+  animation: zalusaDrift 16s ease-in-out infinite;
+}
+
+/* Hide number input spin buttons */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
 }

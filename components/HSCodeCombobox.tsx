@@ -158,17 +158,15 @@ export function HSCodeCombobox({
         )}
       </div>
 
-      {/* AI Tahmin Bilgi Bandı (dropdown dışında, input altında) */}
+      {/* Sistem Önerisi Bilgi Bandı (dropdown dışında, input altında) */}
       {aiResult && !open && (
         <div className="absolute left-0 top-[calc(100%-2px)] z-40 w-full">
-          <div className="flex items-center gap-2 rounded-b-xl bg-gradient-to-r from-violet-50 to-indigo-50 px-3 py-1.5 ring-1 ring-violet-200/50">
-            <Sparkles className="h-3 w-3 text-violet-500 shrink-0" />
-            <span className="text-[11px] text-violet-700 truncate">
+          <div className="flex items-center gap-2 rounded-b-xl bg-gradient-to-r from-blue-50 to-sky-50 px-3 py-1.5 ring-1 ring-blue-200/50">
+            <Sparkles className="h-3 w-3 text-blue-500 shrink-0" />
+            <span className="text-[11px] text-blue-700 truncate">
               <span className="font-semibold">{aiResult.resolved_name}</span>
-              <span className="text-violet-400 mx-1">•</span>
+              <span className="text-blue-400 mx-1">•</span>
               <span className="font-mono">{aiResult.hs_code}</span>
-              <span className="text-violet-400 mx-1">•</span>
-              <span className="text-violet-500">%{aiResult.confidence_score} güven</span>
               {aiResult.status === "cache" && <span className="text-emerald-600 ml-1">(önbellek)</span>}
             </span>
           </div>
@@ -179,28 +177,27 @@ export function HSCodeCombobox({
       {open && (results.length > 0 || aiResult) && (
         <div className="absolute left-0 top-[calc(100%-4px)] z-50 w-[280px] sm:w-[320px] max-h-64 overflow-auto rounded-[5px] bg-surface shadow-lg ring-1 ring-border">
 
-          {/* AI Tahmin Önerisi (varsa en üstte) */}
+          {/* Sistem Önerisi (varsa en üstte) */}
           {aiResult && (
-            <div className="border-b border-violet-100">
-              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600 bg-violet-50 flex items-center gap-1.5">
+            <div className="border-b border-blue-100">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600 bg-blue-50 flex items-center gap-1.5">
                 <Sparkles className="h-3 w-3" />
-                AI Tahmin
+                Sistem Önerisi
                 {aiResult.status === "cache" && <span className="text-emerald-600 ml-1 normal-case font-normal">(önbellek)</span>}
               </div>
               <button
                 type="button"
                 onClick={() => { onChange(aiResult.hs_code); setSearch(aiResult.hs_code); setOpen(false); }}
                 className={cn(
-                  "flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-violet-50",
-                  value === aiResult.hs_code && "bg-violet-50"
+                  "flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-blue-50",
+                  value === aiResult.hs_code && "bg-blue-50"
                 )}
               >
-                <div className="shrink-0 rounded bg-violet-100 px-2 py-0.5 text-[11px] font-mono font-semibold text-violet-700">
+                <div className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-[11px] font-mono font-semibold text-blue-700">
                   {aiResult.hs_code}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-foreground truncate">{aiResult.resolved_name}</div>
-                  <div className="text-xs text-violet-500">Güven: %{aiResult.confidence_score}</div>
                 </div>
               </button>
             </div>
@@ -257,12 +254,12 @@ export function HSCodeCombobox({
         </div>
       )}
 
-      {/* AI yükleniyor durumu (dropdown açıkken) */}
+      {/* Sistem önerisi yükleniyor durumu (dropdown açıkken) */}
       {open && aiLoading && results.length === 0 && (
         <div className="absolute left-0 top-[calc(100%-4px)] z-50 w-[280px] sm:w-[320px] rounded-[5px] bg-surface shadow-lg ring-1 ring-border">
-          <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-violet-600">
+          <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-blue-600">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>AI ile GTİP kodu tahmin ediliyor...</span>
+            <span>Sistem ile otomatik GTİP eşleştiriliyor...</span>
           </div>
         </div>
       )}

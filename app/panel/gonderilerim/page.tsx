@@ -472,6 +472,17 @@ export default function GonderilerimPage() {
                         {s.carrierName}{s.serviceName ? ` ${s.serviceName}` : ""}
                       </div>
                     )}
+                    {/* Attachments */}
+                    {(s as any).attachments && (s as any).attachments.length > 0 && (
+                      <div className="flex items-center gap-2 ml-1">
+                        <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+                        {(s as any).attachments.map((att: any, i: number) => (
+                          <a key={i} href={getLogoSrc(att.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-sky-50 border border-sky-100 text-sky-700 text-[12px] font-bold tracking-wide hover:bg-sky-100 transition-colors">
+                            <ExternalLink className="h-3 w-3" /> {att.fileType || "Belge"}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-4 sm:gap-5 text-[12px] text-slate-400 font-medium">

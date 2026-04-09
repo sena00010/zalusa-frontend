@@ -19,6 +19,11 @@ export interface ApiProfile {
   lastLogin?: string | null;
   totalShipments?: number;
   totalSpent?: number;
+  reseller?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 export interface ApiUpdateProfile {

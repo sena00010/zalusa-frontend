@@ -19,6 +19,7 @@ import {
   Headphones,
   Calculator,
   Crown,
+  TicketCheck,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -26,6 +27,7 @@ const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/kurye-talepleri", label: "Kurye Talepleri", icon: Truck },
   { href: "/admin/canli-destek", label: "Canlı Destek", icon: Headphones },
+  { href: "/admin/destek-talepleri", label: "Destek Talepleri", icon: TicketCheck },
   { href: "/admin/kargo-sirketleri", label: "Kargo Şirketleri", icon: Building2 },
   { href: "/admin/doviz-kurlari", label: "Döviz Kurları", icon: DollarSign },
   { href: "/admin/margin-rules", label: "Fiyat & Marj Kuralları", icon: Calculator },
@@ -89,9 +91,9 @@ function AdminSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Brand */}
-      <div className="px-7 pt-8">
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Brand — sabit üst */}
+      <div className="px-7 pt-8 shrink-0">
         <Link href="/admin" className="group flex items-center gap-2" onClick={onNavigate}>
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 ring-1 ring-indigo-100">
             <Image src="/logo-ikon.png" alt="Zalusa" width={26} height={26} />
@@ -104,19 +106,19 @@ function AdminSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       {/* Divider */}
-      <div className="mt-6 px-7">
+      <div className="mt-6 px-7 shrink-0">
         <div className="h-px w-full bg-slate-100" />
       </div>
 
-      {/* Nav */}
-      <nav className="mt-5 flex-1 space-y-1.5 px-5">
+      {/* Nav — scroll edilebilir */}
+      <nav className="mt-5 flex-1 min-h-0 overflow-y-auto space-y-1.5 px-5 pb-2">
         {adminNavItems.map((item) => (
           <AdminSidebarLink key={item.href} {...item} onNavigate={onNavigate} />
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="px-5 pb-6">
+      {/* Logout — sabit alt */}
+      <div className="px-5 py-4 shrink-0 border-t border-slate-100 bg-white">
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-2 rounded-2xl px-4 py-1 text-[15px] font-semibold text-red-500 transition-all duration-200 hover:bg-red-50"

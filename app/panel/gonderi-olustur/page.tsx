@@ -318,6 +318,7 @@ export default function GonderiOlusturPage() {
   const [done, setDone] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [apiError, setApiError] = React.useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [showNewSenderForm, setShowNewSenderForm] = React.useState(false);
   const [showNewReceiverForm, setShowNewReceiverForm] = React.useState(false);
   const [showServicesModal, setShowServicesModal] = React.useState(false);
@@ -342,7 +343,7 @@ const [showPackageExcel, setShowPackageExcel] = React.useState(false);
   // ── Gümrük Belgeleri Yükleme State'leri ──
   const [docFileType, setDocFileType] = React.useState("INVOICE");
   const [docUploading, setDocUploading] = React.useState(false);
-  const [docUploadedFiles, setDocUploadedFiles] = React.useState<{id: number; name: string; type: string; url: string; size: number}[]>([]);
+  const [docUploadedFiles, setDocUploadedFiles] = React.useState<any[]>([]);
   const [docDragOver, setDocDragOver] = React.useState(false);
   const [docError, setDocError] = React.useState<string | null>(null);
   const [docSuccess, setDocSuccess] = React.useState<string | null>(null);
@@ -706,11 +707,26 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
   // ── Adım ilerleme (API çağrılı) ─────────────────────────────────────────────
   
   async function saveProformaDetails() {
-    // Proforma specific validation if needed
-    if (!draft.proformaDescription) {
-      setApiError("Lütfen gönderi içeriği seçiniz.");
+    // Proforma specific validation
+    const errors: Record<string, string> = {};
+    if (!draft.proformaDescription) errors.proformaDescription = "Zorunlu";
+    if (!draft.proformaCurrency) errors.proformaCurrency = "Zorunlu";
+    
+    draft.proformaItems.forEach((item, idx) => {
+      if (!item.origin) errors[`item_${idx}_origin`] = "Zorunlu";
+      if (!item.productDescription) errors[`item_${idx}_productName`] = "Zorunlu";
+      if (!item.hsCode) errors[`item_${idx}_hsCode`] = "Zorunlu";
+      if (!item.quantity || toNumber(item.quantity) <= 0) errors[`item_${idx}_quantity`] = "Zorunlu";
+      if (!item.unitPrice || toNumber(item.unitPrice) <= 0) errors[`item_${idx}_unitPrice`] = "Zorunlu";
+    });
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setApiError("Lütfen zorunlu alanları doldurunuz.");
       return;
     }
+
+    setFieldErrors({});
     await next();
   }
 
@@ -922,6 +938,13 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
     setLoading(true);
     setApiError(null);
     try {
+      if (docUploadedFiles.length > 0) {
+        await Promise.all(
+          docUploadedFiles.map(f => documentService.upload(f.file, shipmentId, f.type))
+        ).catch((err: any) => {
+          throw new Error("Belgeler yüklenirken hata oluştu: " + (err?.message || "Bilinmeyen Hata"));
+        });
+      }
       await shipmentService.updateDraft(shipmentId, 5, {});
       setDone(true);
     } catch (err: any) {
@@ -1075,10 +1098,12 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                   <button type="button" onClick={back} disabled={step === 0 || loading} className="flex items-center gap-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-[#0F172A] transition-colors shadow-sm disabled:opacity-40">
                     <span>←</span> Geri
                   </button>
-                  <button type="button" onClick={next} disabled={loading} className="flex items-center gap-2 rounded-xl bg-[#3959F2] hover:bg-[#4338CA] px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-white transition-colors disabled:opacity-50">
-                    {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Devam <span>→</span>
-                  </button>
+                  {step !== 3 && (
+                    <button type="button" onClick={next} disabled={loading} className="flex items-center gap-2 rounded-xl bg-[#3959F2] hover:bg-[#4338CA] px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-white transition-colors disabled:opacity-50">
+                      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Devam <span>→</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1088,12 +1113,11 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
         <CardContent>
           {/* ===== STEP 0 — Kargo Bilgileri ===== */}
           {step === 0 && (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-5">
               {/* ── Gönderi Tipi ── */}
               <div>
-                <div className="mb-4 text-[14px] font-bold text-[#0F172A]">Gönderi Tipi</div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="mb-2.5 text-[13px] font-bold text-[#0F172A]">Gönderi Tipi</div>
+                <div className="grid grid-cols-3 gap-2.5">
                   {(["Belge", "Paket", "Koli"] as const).map((typeName) => {
                     const meta = SHIPMENT_TYPE_META[typeName];
                     const isActive = draft.shipmentType === typeName;
@@ -1103,18 +1127,18 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                         type="button"
                         onClick={() => update("shipmentType", typeName as any)}
                         className={cn(
-                          "relative flex items-center justify-between rounded-2xl px-5 py-4 text-left transition-all duration-200",
+                          "relative flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left transition-all duration-200",
                           isActive
                             ? "bg-[#3959F2] text-white shadow-lg shadow-[#4F46E5]/25"
                             : "bg-[#F8FAFC] text-[#0F172A] ring-1 ring-[#E2E8F0] hover:ring-[#CBD5E1] hover:shadow-sm"
                         )}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="text-[15px] font-bold">{typeName}</div>
-                          <div className={cn("mt-0.5 text-[12px] font-medium", isActive ? "text-white/75" : "text-[#94A3B8]")}>{meta.description}</div>
+                          <div className="text-[14px] font-bold">{typeName}</div>
+                          <div className={cn("mt-0.5 text-[11px] font-medium", isActive ? "text-white/75" : "text-[#94A3B8]")}>{meta.description}</div>
                         </div>
-                        <div className="ml-3 shrink-0">
-                          <img src={`/${typeName.toLowerCase()}.png`} alt={typeName} className="drop-shadow-sm transition-transform group-hover:scale-110 h-12 w-12 sm:h-auto sm:w-auto object-contain" />
+                        <div className="ml-2 shrink-0">
+                          <img src={`/${typeName.toLowerCase()}.png`} alt={typeName} className="drop-shadow-sm h-10 w-10 object-contain" />
                         </div>
                       </button>
                     );
@@ -1122,95 +1146,71 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                 </div>
               </div>
 
-              {/* ── Gönderici Ülke + Alıcı Ülke (yan yana) ── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* ── Gönderici Ülke + Alıcı Ülke + Posta Kodu (3 kolon) ── */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Gönderici Ülke */}
                 <div>
-                  <div className="mb-2 text-xs font-bold uppercase tracking-widest">
+                  <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
                     Gönderici Ülke <span className="text-red-500">*</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-5 py-4 ring-1 ring-border h-12">
-                    <div className="flex items-center gap-3">
-                      {/* Türkiye bayrağı */}
-                      <div className="shrink-0 overflow-hidden rounded-md shadow-sm ring-1 ring-border h-6 w-9 relative">
-                        <img
-                          src="https://flagcdn.com/w40/tr.png"
-                          alt="Türkiye"
-                          className="w-full h-full object-cover"
-                        />
+                  <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3.5 ring-1 ring-border h-10">
+                    <div className="flex items-center gap-2">
+                      <div className="shrink-0 overflow-hidden rounded-sm shadow-sm ring-1 ring-border h-5 w-7 relative">
+                        <img src="https://flagcdn.com/w40/tr.png" alt="Türkiye" className="w-full h-full object-cover" />
                       </div>
-                      <div className="text-sm font-bold text-foreground">Türkiye</div>
+                      <div className="text-[13px] font-bold text-foreground">Türkiye</div>
                     </div>
-                    <span className="text-xs font-medium text-muted">Değiştirilemez</span>
+                    <span className="text-[10px] font-medium text-muted">Sabit</span>
                   </div>
-                  <div className="mt-1.5 text-xs text-muted">Varsayılan gönderici ülke</div>
                 </div>
 
                 {/* Alıcı Ülke */}
                 <div>
-                  <div className="mb-2 text-xs font-bold uppercase tracking-widest">
+                  <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
                     Alıcı Ülke <span className="text-red-500">*</span>
                   </div>
-                  <div className="rounded-2xl ring-1 ring-border bg-surface">
+                  <div className="rounded-xl ring-1 ring-border bg-surface">
                     <SearchableSelect
                       options={apiCountries.length > 0 ? apiCountries : RECEIVER_COUNTRIES.map((c) => ({ ...c, label: (<div className="flex items-center gap-2"><CountryFlag code={c.value} size="sm" /><span>{c.label}</span></div>) as any, searchableText: c.label }))}
                       value={draft.receiverCountry}
                       onChange={(v) => { update("receiverCountry", v); update("receiverPostalCode", ""); }}
-                      placeholder="Alıcı Ülke Seçiniz"
-                      className="h-12 border-0 ring-0 focus:ring-0 bg-transparent text-sm px-4"
+                      placeholder="Ülke Seçiniz"
+                      className="h-10 border-0 ring-0 focus:ring-0 bg-transparent text-[13px] px-3"
                     />
                   </div>
-                  <div className="mt-1.5 text-xs text-muted">Örn: Almanya</div>
                 </div>
-              </div>
 
-              {/* ── Alıcı Posta Kodu + Hızlı İpucu (yan yana, eşit genişlik) ── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Alıcı Posta Kodu */}
                 <div>
-                  <div className="mb-2 text-xs font-bold uppercase tracking-widest">
-                    Alıcı Posta Kodu / Şehir <span className="text-red-500">*</span>
+                  <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Posta Kodu / Şehir <span className="text-red-500">*</span>
                   </div>
-                  <div className="relative rounded-2xl ring-1 ring-border bg-surface overflow-hidden">
+                  <div className="relative rounded-xl ring-1 ring-border bg-surface overflow-hidden">
                     <Input
                       value={draft.receiverPostalCode}
                       onChange={(e) => update("receiverPostalCode", e.target.value)}
-                      placeholder="Alıcı Posta Kodu veya Şehir Adı"
+                      placeholder="Örn: 10115"
                       disabled={!draft.receiverCountry}
-                      className="h-12 border-0 ring-0 focus:ring-0 focus-visible:ring-0 shadow-none bg-transparent text-sm pr-10 disabled:opacity-100"
+                      className="h-10 border-0 ring-0 focus:ring-0 focus-visible:ring-0 shadow-none bg-transparent text-[13px] pr-8 disabled:opacity-100"
                     />
-                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted">
-                      <MapPin className="h-5 w-5" />
-                    </div>
-                  </div>
-                  <div className="mt-1.5 text-xs text-muted">Örn: 10115 veya Berlin</div>
-                </div>
-
-                {/* Hızlı ipucu */}
-                <div className="flex flex-col justify-center">
-                  <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50/60 px-4 h-12 ring-1 ring-emerald-200">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-foreground">Hızlı ipucu</div>
-                      <div className="text-[10px] text-muted leading-tight">Ülke + posta kodu doğru olursa fiyat daha isabetli çıkar.</div>
+                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted">
+                      <MapPin className="h-4 w-4" />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* ── Footer: zorunlu alanlar + buttons ── */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-border">
-                <div className="flex items-center gap-1.5 text-sm text-muted">
-                  <Info className="h-4 w-4 shrink-0" />
+              <div className="flex items-center justify-between pt-3 border-t border-border">
+                <div className="flex items-center gap-1.5 text-[12px] text-muted">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
                   <span>Zorunlu alanlar <span className="text-red-500 font-semibold">*</span> ile işaretlidir.</span>
                 </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button type="button" onClick={back} disabled={step === 0} className="flex items-center gap-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-[#0F172A] transition-colors shadow-sm disabled:opacity-40">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={back} disabled={step === 0} className="flex items-center gap-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-2 text-[13px] font-bold text-[#0F172A] transition-colors shadow-sm disabled:opacity-40">
                     <span>←</span> Geri
                   </button>
-                  <button type="button" onClick={next} className="flex items-center gap-2 rounded-xl bg-[#3959F2] hover:bg-[#4338CA] px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-white transition-colors">
+                  <button type="button" onClick={next} className="flex items-center gap-2 rounded-xl bg-[#3959F2] hover:bg-[#4338CA] px-5 py-2 text-[13px] font-bold text-white transition-colors">
                     Devam <span>→</span>
                   </button>
                 </div>
@@ -1251,6 +1251,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                               onChange={v => applyPresetToPackage(pkg.id, v as string)}
                               placeholder="Şablon seç"
                               className="h-9 border-0 ring-0 focus:ring-0 bg-transparent text-[12px] px-3 min-w-[120px]"
+                              hideSearchAndSort={true}
                             />
                           </div>
                           {draft.packages.length > 1 && (
@@ -1644,28 +1645,28 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
             const receiverCityLabel = selectedReceiver?.city || draft.receiverCity || "";
 
             return (
-              <div className="space-y-5 pb-24">
+              <div className="space-y-3 pb-20">
                 {/* Header */}
                 <div>
-                  <h2 className="text-[18px] font-bold text-[#0F172A]">Adres Bilgileri</h2>
-                  <p className="text-[13px] text-[#94A3B8] mt-1">Gönderen ve alıcı adreslerini seçin veya yeni ekleyin.</p>
+                  <h2 className="text-[16px] font-bold text-[#0F172A]">Adres Bilgileri</h2>
+                  <p className="text-[12px] text-[#94A3B8] mt-0.5">Gönderen ve alıcı adreslerini seçin veya yeni ekleyin.</p>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex rounded-xl overflow-hidden ring-1 ring-[#E2E8F0]">
-                  <button type="button" onClick={() => setAddressTab("sender")} className={cn("flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors", addressTab === "sender" ? "bg-[#0F172A] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]")}>
-                    {hasSender ? <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px] font-bold">1</span>}
+                <div className="flex rounded-lg overflow-hidden ring-1 ring-[#E2E8F0]">
+                  <button type="button" onClick={() => setAddressTab("sender")} className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors", addressTab === "sender" ? "bg-[#0F172A] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]")}>
+                    {hasSender ? <div className="h-3.5 w-3.5 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="h-2 w-2 text-white" /></div> : <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">1</span>}
                     Gönderici
                   </button>
-                  <button type="button" onClick={() => setAddressTab("receiver")} className={cn("flex-1 flex items-center justify-center gap-2 py-3 text-[13px] font-semibold transition-colors", addressTab === "receiver" ? "bg-[#0F172A] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]")}>
-                    {hasReceiver ? <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="h-2.5 w-2.5 text-white" /></div> : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-[11px] font-bold">2</span>}
+                  <button type="button" onClick={() => setAddressTab("receiver")} className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 text-[12px] font-semibold transition-colors", addressTab === "receiver" ? "bg-[#0F172A] text-white" : "bg-white text-[#64748B] hover:bg-[#F8FAFC]")}>
+                    {hasReceiver ? <div className="h-3.5 w-3.5 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="h-2 w-2 text-white" /></div> : <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">2</span>}
                     Alıcı
                   </button>
                 </div>
 
                 {/* ===== Gönderici Tab ===== */}
                 {addressTab === "sender" && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="text-[14px] font-semibold text-[#0F172A]">Kayıtlı Gönderici Adresleriniz</div>
                       <button type="button" onClick={() => { setShowNewSenderForm(!showNewSenderForm); if (!showNewSenderForm) update("selectedSenderAddressId", ""); }} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F46E5] hover:text-[#4338CA] transition-colors">
@@ -1674,43 +1675,42 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                     </div>
 
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
-                      <Input value={senderSearch} onChange={e => setSenderSearch(e.target.value)} placeholder="İsim veya adres ile arayın..." className="pl-10 h-11 rounded-xl ring-1 ring-[#E2E8F0] border-0 bg-white text-[13px]" />
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94A3B8]" />
+                      <Input value={senderSearch} onChange={e => setSenderSearch(e.target.value)} placeholder="İsim veya adres ile arayın..." className="pl-9 h-9 rounded-lg ring-1 ring-[#E2E8F0] border-0 bg-white text-[12px]" />
                     </div>
 
                     {!showNewSenderForm && (filteredSenderAddresses.length > 0
-                      ? <div className="flex flex-col gap-3">
+                      ? <div className="flex flex-col gap-2">
                           {filteredSenderAddresses.map(a => {
                             const isSelected = draft.selectedSenderAddressId === String(a.id);
                             return (
-                              <button key={String(a.id)} type="button" onClick={() => { update("selectedSenderAddressId", String(a.id)); setShowNewSenderForm(false); }} className={cn("group flex w-full items-center justify-between rounded-2xl p-5 text-left ring-1 transition-all", isSelected ? "bg-white ring-2 ring-[#4F46E5] shadow-sm" : "bg-white ring-[#E2E8F0] hover:ring-[#CBD5E1] hover:shadow-sm")}>
-                                <div className="flex items-center gap-4">
-                                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
-                                    <User className="h-5 w-5" />
+                              <button key={String(a.id)} type="button" onClick={() => { update("selectedSenderAddressId", String(a.id)); setShowNewSenderForm(false); }} className={cn("group flex w-full items-center justify-between rounded-xl p-3 text-left ring-1 transition-all", isSelected ? "bg-white ring-2 ring-[#4F46E5] shadow-sm" : "bg-white ring-[#E2E8F0] hover:ring-[#CBD5E1] hover:shadow-sm")}>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
+                                    <User className="h-4 w-4" />
                                   </div>
                                   <div>
-                                    <div className="text-[14px] font-bold text-[#0F172A]">{a.name}</div>
-                                    <div className="text-[12px] text-[#94A3B8] mt-0.5">{a.company && <>{a.company} · </>}{a.city}</div>
-                                    <div className="text-[12px] text-[#94A3B8]">{a.address}</div>
+                                    <div className="text-[13px] font-bold text-[#0F172A]">{a.name}</div>
+                                    <div className="text-[11px] text-[#94A3B8]">{a.company && <>{a.company} · </>}{a.city} · {a.address}</div>
                                   </div>
                                 </div>
-                                <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-2 transition-colors", isSelected ? "bg-[#3959F2] ring-[#4F46E5]" : "bg-white ring-[#CBD5E1] group-hover:ring-[#94A3B8]")}>
-                                  {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}
+                                <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-2 transition-colors", isSelected ? "bg-[#3959F2] ring-[#4F46E5]" : "bg-white ring-[#CBD5E1] group-hover:ring-[#94A3B8]")}>
+                                  {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                                 </div>
                               </button>
                             );
                           })}
                         </div>
-                      : <div className="rounded-2xl bg-[#F8FAFC] p-6 text-center text-[13px] text-[#94A3B8] ring-1 ring-[#E2E8F0]">{senderSearch ? "Arama kriterlerinize uygun kayıtlı gönderici adresi bulunamadı." : "Kayıtlı gönderici adresiniz bulunmamaktadır."}</div>
+                      : <div className="rounded-xl bg-[#F8FAFC] p-4 text-center text-[12px] text-[#94A3B8] ring-1 ring-[#E2E8F0]">{senderSearch ? "Arama kriterlerinize uygun kayıtlı gönderici adresi bulunamadı." : "Kayıtlı gönderici adresiniz bulunmamaktadır."}</div>
                     )}
 
                     {showNewSenderForm && (
-                      <div className="rounded-2xl bg-white p-5 ring-1 ring-[#E2E8F0]">
-                        <div className="mb-4 flex items-center justify-between">
-                          <div className="text-[14px] font-semibold text-[#0F172A]">Yeni Gönderici Adresi</div>
+                      <div className="rounded-xl bg-white p-4 ring-1 ring-[#E2E8F0]">
+                        <div className="mb-3 flex items-center justify-between">
+                          <div className="text-[13px] font-semibold text-[#0F172A]">Yeni Gönderici Adresi</div>
                           <button type="button" onClick={() => setShowNewSenderForm(false)} className="text-[12px] font-medium text-[#94A3B8] hover:text-[#475569]">İptal</button>
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <Field label="Ad Soyad" icon={User}><Input value={draft.senderName} onChange={e => update("senderName", e.target.value)} placeholder="Gönderici adı soyadı" /></Field>
                           <Field label="Firma Adı" icon={Building}><Input value={draft.senderCompany} onChange={e => update("senderCompany", e.target.value)} placeholder="Firma adı (opsiyonel)" /></Field>
                           <Field label="Telefon" icon={Phone}><Input value={draft.senderPhone} onChange={e => { let v = e.target.value; if (!v.startsWith("+90")) v = "+90" + v.replace(/^\+?9?0?/, ""); update("senderPhone", v); }} placeholder="+90 5XX XXX XX XX" /></Field>
@@ -1725,7 +1725,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                           </Field>
                           <div className="sm:col-span-2"><Field label="Açık Adres" icon={MapPinned}><Input value={draft.senderAddress} onChange={e => update("senderAddress", e.target.value)} placeholder="Sokak, cadde, bina no, daire no..." /></Field></div>
                         </div>
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-3 flex justify-end">
                           <Button type="button" variant={draft.saveSenderAddress ? "primary" : "secondary"} onClick={() => update("saveSenderAddress", !draft.saveSenderAddress)}
                             className={cn("gap-2 transition-all", draft.saveSenderAddress && "bg-brand-600 text-white hover:bg-brand-700 border-none ring-0 focus-visible:ring-0")}>
                             {draft.saveSenderAddress ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
@@ -1735,18 +1735,13 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                       </div>
                     )}
 
-                    {/* Continue to receiver CTA */}
-                    {hasSender && (
-                      <button type="button" onClick={() => setAddressTab("receiver")} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white py-3 text-[14px] font-bold transition-colors">
-                        Devam — Alıcı Adresi <span>→</span>
-                      </button>
-                    )}
+
                   </div>
                 )}
 
                 {/* ===== Alıcı Tab ===== */}
                 {addressTab === "receiver" && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="text-[14px] font-semibold text-[#0F172A]">Kayıtlı Alıcı Adresleri</div>
                       <button type="button" onClick={() => { setShowNewReceiverForm(!showNewReceiverForm); if (!showNewReceiverForm) update("selectedReceiverAddressId", ""); }} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#4F46E5] hover:text-[#4338CA] transition-colors">
@@ -1755,43 +1750,42 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                     </div>
 
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
-                      <Input value={receiverSearch} onChange={e => setReceiverSearch(e.target.value)} placeholder="İsim veya adres ile arayın..." className="pl-10 h-11 rounded-xl ring-1 ring-[#E2E8F0] border-0 bg-white text-[13px]" />
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94A3B8]" />
+                      <Input value={receiverSearch} onChange={e => setReceiverSearch(e.target.value)} placeholder="İsim veya adres ile arayın..." className="pl-9 h-9 rounded-lg ring-1 ring-[#E2E8F0] border-0 bg-white text-[12px]" />
                     </div>
 
                     {!showNewReceiverForm && (filteredReceiverAddresses.length > 0
-                      ? <div className="flex flex-col gap-3">
+                      ? <div className="flex flex-col gap-2">
                           {filteredReceiverAddresses.map(a => {
                             const isSelected = draft.selectedReceiverAddressId === String(a.id);
                             return (
-                              <button key={String(a.id)} type="button" onClick={() => { update("selectedReceiverAddressId", String(a.id)); setShowNewReceiverForm(false); }} className={cn("group flex w-full items-center justify-between rounded-2xl p-5 text-left ring-1 transition-all", isSelected ? "bg-white ring-2 ring-[#4F46E5] shadow-sm" : "bg-white ring-[#E2E8F0] hover:ring-[#CBD5E1] hover:shadow-sm")}>
-                                <div className="flex items-center gap-4">
-                                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
-                                    <User className="h-5 w-5" />
+                              <button key={String(a.id)} type="button" onClick={() => { update("selectedReceiverAddressId", String(a.id)); setShowNewReceiverForm(false); }} className={cn("group flex w-full items-center justify-between rounded-xl p-3 text-left ring-1 transition-all", isSelected ? "bg-white ring-2 ring-[#4F46E5] shadow-sm" : "bg-white ring-[#E2E8F0] hover:ring-[#CBD5E1] hover:shadow-sm")}>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]">
+                                    <User className="h-4 w-4" />
                                   </div>
                                   <div>
-                                    <div className="text-[14px] font-bold text-[#0F172A]">{a.name}</div>
-                                    <div className="text-[12px] text-[#94A3B8] mt-0.5">{a.company && <>{a.company} · </>}{a.city}</div>
-                                    <div className="text-[12px] text-[#94A3B8]">{a.address}</div>
+                                    <div className="text-[13px] font-bold text-[#0F172A]">{a.name}</div>
+                                    <div className="text-[11px] text-[#94A3B8]">{a.company && <>{a.company} · </>}{a.city} · {a.address}</div>
                                   </div>
                                 </div>
-                                <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-2 transition-colors", isSelected ? "bg-[#3959F2] ring-[#4F46E5]" : "bg-white ring-[#CBD5E1] group-hover:ring-[#94A3B8]")}>
-                                  {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}
+                                <div className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-2 transition-colors", isSelected ? "bg-[#3959F2] ring-[#4F46E5]" : "bg-white ring-[#CBD5E1] group-hover:ring-[#94A3B8]")}>
+                                  {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                                 </div>
                               </button>
                             );
                           })}
                         </div>
-                      : <div className="rounded-2xl bg-[#F8FAFC] p-6 text-center text-[13px] text-[#94A3B8] ring-1 ring-[#E2E8F0]">{receiverSearch ? "Arama kriterlerinize uygun kayıtlı alıcı adresi bulunamadı." : "Bu posta koduna kayıtlı alıcı adresiniz bulunmamaktadır."}</div>
+                      : <div className="rounded-xl bg-[#F8FAFC] p-4 text-center text-[12px] text-[#94A3B8] ring-1 ring-[#E2E8F0]">{receiverSearch ? "Arama kriterlerinize uygun kayıtlı alıcı adresi bulunamadı." : "Bu posta koduna kayıtlı alıcı adresiniz bulunmamaktadır."}</div>
                     )}
 
                     {showNewReceiverForm && (
-                      <div className="rounded-2xl bg-white p-5 ring-1 ring-[#E2E8F0]">
-                        <div className="mb-4 flex items-center justify-between">
-                          <div className="text-[14px] font-semibold text-[#0F172A]">Yeni Alıcı Adresi</div>
+                      <div className="rounded-xl bg-white p-4 ring-1 ring-[#E2E8F0]">
+                        <div className="mb-3 flex items-center justify-between">
+                          <div className="text-[13px] font-semibold text-[#0F172A]">Yeni Alıcı Adresi</div>
                           <button type="button" onClick={() => setShowNewReceiverForm(false)} className="text-[12px] font-medium text-[#94A3B8] hover:text-[#475569]">İptal</button>
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-3 sm:grid-cols-3">
                           <Field label="Ad Soyad" icon={User}><Input value={draft.receiverName} onChange={e => update("receiverName", e.target.value)} placeholder="Alıcı adı soyadı" /></Field>
                           <Field label="Firma Adı" icon={Building}><Input value={draft.receiverCompany} onChange={e => update("receiverCompany", e.target.value)} placeholder="Firma adı (opsiyonel)" /></Field>
                           <Field label="Telefon" icon={Phone}>
@@ -1853,7 +1847,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                           </Field>
                           <div className="sm:col-span-2"><Field label="Açık Adres" icon={MapPinned}><Input value={draft.receiverAddress} onChange={e => update("receiverAddress", e.target.value)} placeholder="Sokak, cadde, bina no, daire no..." /></Field></div>
                         </div>
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-3 flex justify-end">
                           <Button type="button" variant={draft.saveReceiverAddress ? "primary" : "secondary"} onClick={() => update("saveReceiverAddress", !draft.saveReceiverAddress)}
                             className={cn("gap-2 transition-all", draft.saveReceiverAddress && "bg-brand-600 text-white hover:bg-brand-700 border-none ring-0 focus-visible:ring-0")}>
                             {draft.saveReceiverAddress ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
@@ -1866,45 +1860,43 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                 )}
 
                 {/* Route summary strip */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl bg-[#F8FAFC] ring-1 ring-[#E2E8F0] p-3 sm:p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]"><User className="h-4 w-4" /></div>
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-[#F8FAFC] ring-1 ring-[#E2E8F0] px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]"><User className="h-3 w-3" /></div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-[#0F172A]">{senderLabel || "Seçilmedi"}</span>
-                        <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#F1F5F9] rounded px-1.5 py-0.5">Gönderici</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-bold text-[#0F172A]">{senderLabel || "Seçilmedi"}</span>
+                        <span className="text-[9px] font-semibold text-[#94A3B8] bg-[#F1F5F9] rounded px-1 py-0.5">Gönderici</span>
                       </div>
-                      {senderCompanyLabel && <div className="text-[11px] text-[#94A3B8]">{senderCompanyLabel} · {senderCityLabel}</div>}
                     </div>
                   </div>
-                  <div className="text-[#CBD5E1]"><ArrowRight className="h-5 w-5" /></div>
-                  <div className="flex items-center gap-3">
+                  <ArrowRight className="h-4 w-4 text-[#CBD5E1] shrink-0" />
+                  <div className="flex items-center gap-2">
                     <div>
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#F1F5F9] rounded px-1.5 py-0.5">Alıcı</span>
-                        <span className="text-[13px] font-bold text-[#0F172A]">{receiverLabel || "Henüz girilmedi"}</span>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-[9px] font-semibold text-[#94A3B8] bg-[#F1F5F9] rounded px-1 py-0.5">Alıcı</span>
+                        <span className="text-[12px] font-bold text-[#0F172A]">{receiverLabel || "Henüz girilmedi"}</span>
                       </div>
-                      {receiverCompanyLabel && <div className="text-[11px] text-[#94A3B8] text-right">{receiverCompanyLabel} · {receiverCityLabel}</div>}
                     </div>
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]"><User className="h-4 w-4" /></div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[#94A3B8]"><User className="h-3 w-3" /></div>
                   </div>
                 </div>
 
          {/* Sticky bottom bar */}
-                <div className="sticky bottom-4 z-40 pointer-events-none mt-auto">
-                  <div className="pointer-events-auto bg-[#0F172A] text-white shadow-2xl rounded-2xl">
-                    <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                <div className="sticky bottom-3 z-40 pointer-events-none mt-auto">
+                  <div className="pointer-events-auto bg-[#0F172A] text-white shadow-2xl rounded-xl">
+                    <div className="flex items-center justify-between p-2.5 sm:p-3">
                       <div className="min-w-0">
-                        <div className="text-[13px] sm:text-[14px] font-bold">Adres Seçimi</div>
-                        <div className="text-[11px] sm:text-[12px] text-[#94A3B8] truncate">
+                        <div className="text-[12px] sm:text-[13px] font-bold">Adres Seçimi</div>
+                        <div className="text-[10px] sm:text-[11px] text-[#94A3B8] truncate">
                           {hasSender && <>Gönderici: <span className="font-semibold text-white">{senderLabel}</span></>}
                           {hasSender && hasReceiver && " • "}
                           {hasReceiver && <>Alıcı: <span className="font-semibold text-white">{receiverLabel}</span></>}
                         </div>
                       </div>
-                      <button type="button" onClick={next} disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] px-4 sm:px-6 py-2.5 sm:py-3 text-[13px] sm:text-[14px] font-bold text-white transition-colors disabled:opacity-50 shrink-0 self-end sm:self-auto">
-                        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                        Devam <span>→</span>
+                      <button type="button" onClick={() => { if (addressTab === "sender") { setAddressTab("receiver"); } else { next(); } }} disabled={loading} className="flex items-center justify-center gap-1.5 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] px-4 py-2 text-[12px] sm:text-[13px] font-bold text-white transition-colors disabled:opacity-50 shrink-0">
+                        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {addressTab === "sender" ? <>Alıcı Adresi <span>→</span></> : <>Devam <span>→</span></>}
                       </button>
                     </div>
                   </div>
@@ -1931,7 +1923,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                   <AlertTriangle className="h-3 w-3" strokeWidth={2.5} />
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-900">HS Kodu (GTİP) ve IOSS numarası zorunludur</span><br />
+                  <span className="font-semibold text-slate-900">HS Kodu (GTİP) zorunludur</span><br />
                   <span className="text-[13px] text-slate-500">Eksik veya hatalı bilgiler gümrükte gecikmeye neden olabilir.</span>
                 </div>
               </div>
@@ -1942,8 +1934,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                 <div className="grid gap-x-4 gap-y-5 grid-cols-1 sm:grid-cols-[2fr_1fr_1.5fr]">
                   {/* Gönderi İçeriği */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-[12px] font-medium text-slate-500">Gönderi İçeriği</label>
-                    <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
+                    <label className="text-[12px] font-bold text-slate-700 mt-1">Gönderi İçeriği <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                    <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all", fieldErrors.proformaDescription ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                       <Box className="mr-3 h-4 w-4 text-slate-400 shrink-0" />
                       <SearchableSelect
                         options={descriptionTypes.map(dt => ({ label: dt.label, value: dt.label }))}
@@ -1958,8 +1950,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
 
                   {/* Para Birimi */}
                   <div className="flex flex-col gap-2">
-                     <label className="text-[12px] font-medium text-slate-500">Para Birimi</label>
-                     <div className="flex h-[52px] items-center p-1.5 gap-1 rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                     <label className="text-[12px] font-bold text-slate-700 mt-1">Para Birimi <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                     <div className={cn("flex h-[52px] items-center p-1.5 gap-1 rounded-2xl border-[1.5px] overflow-hidden", fieldErrors.proformaCurrency ? "border-red-500 bg-red-50/30 ring-2 ring-red-100" : "border-slate-300 bg-slate-50/50")}>
                       {(["EUR", "USD", "GBP"] as const).map((curr) => (
                         <button key={curr} type="button" onClick={() => update("proformaCurrency", curr)}
                           className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-[12px] h-full transition-all text-[13px] font-bold", draft.proformaCurrency === curr ? "bg-[#0B1527] text-white shadow-sm" : "text-slate-400 hover:bg-slate-50 hover:text-slate-600")}>
@@ -1974,8 +1966,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
 
                   {/* IOSS/VAT */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-[12px] font-medium text-slate-500">IOSS / VAT Numarası</label>
-                    <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
+                    <label className="text-[12px] font-bold text-slate-700 mt-1">IOSS / VAT Numarası</label>
+                    <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all", fieldErrors.proformaIOSS ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                       <span className="flex h-[20px] w-[20px] items-center justify-center rounded-full border border-slate-200 bg-[#F8FAFC] text-[11px] font-medium text-slate-500 shrink-0 mr-3">#</span>
                       <Input value={draft.proformaIOSS} onChange={e => update("proformaIOSS", e.target.value)} placeholder="Örn: IM0000000123 veya EU372000000" className="flex-1 border-0 ring-0 shadow-none bg-transparent p-0 text-[14px] font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400" />
                     </div>
@@ -2016,8 +2008,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                       
                       {/* Menşei */}
                       <div className="sm:col-span-12 lg:col-span-3 flex flex-col gap-2">
-                        <label className="text-[12px] font-medium text-slate-500">Menşei</label>
-                        <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
+                        <label className="text-[12px] font-bold text-slate-700 mt-1">Menşei <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                        <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all", fieldErrors[`item_${idx}_origin`] ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                           <Globe className="mr-3 h-4 w-4 text-slate-400 shrink-0" />
                           <SearchableSelect options={[{ label: "Türkiye", value: "TR" }]} value={item.origin} onChange={v => updateProformaItem(item.id, "origin", v)} hideSearchAndSort className="flex-1 border-0 ring-0 shadow-none bg-transparent p-0 text-[14px] font-medium text-slate-700 focus:ring-0" />
                         </div>
@@ -2025,8 +2017,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
 
                       {/* Ürün Adı */}
                       <div className="sm:col-span-12 lg:col-span-7 flex flex-col gap-2">
-                        <label className="text-[12px] font-medium text-slate-500">Ürün Adı</label>
-                        <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
+                        <label className="text-[12px] font-bold text-slate-700 mt-1">Ürün Adı <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                        <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all", fieldErrors[`item_${idx}_productName`] ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                           <Tag className="mr-3 h-4 w-4 text-slate-400 shrink-0" />
                           <Input value={item.productDescription} onChange={e => updateProformaItem(item.id, "productDescription", e.target.value)} placeholder="Zalusa Surprise Box" className="flex-1 border-0 ring-0 shadow-none bg-transparent p-0 text-[14px] font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400" />
                         </div>
@@ -2034,8 +2026,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
 
                       {/* Miktar */}
                       <div className="sm:col-span-12 lg:col-span-2 flex flex-col gap-2">
-                         <label className="text-[12px] font-medium text-slate-500">Miktar</label>
-                         <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white justify-between">
+                         <label className="text-[12px] font-bold text-slate-700 mt-1">Miktar <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                         <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all justify-between", fieldErrors[`item_${idx}_quantity`] ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                           <Input inputMode="numeric" value={item.quantity} onChange={e => updateProformaItem(item.id, "quantity", e.target.value)} placeholder="4" className="w-[40px] border-0 ring-0 shadow-none bg-transparent p-0 text-[15px] font-semibold text-slate-700 focus:ring-0" />
                           <div className="flex flex-col gap-[2px] border-l border-slate-100 pl-2">
                             <button type="button" onClick={() => updateProformaItem(item.id, "quantity", String(toNumber(item.quantity) + 1))} className="flex h-[18px] w-[24px] items-center justify-center rounded-[6px] bg-[#F1F5F9] hover:bg-[#E2E8F0] text-slate-500 transition-colors"><ChevronUp className="h-3 w-3" /></button>
@@ -2048,8 +2040,8 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
 
                       {/* HS Kodu */}
                       <div className="sm:col-span-12 lg:col-span-5 flex flex-col gap-2">
-                        <label className="text-[12px] font-medium text-slate-500">HS Kodu (GTİP)</label>
-                        <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
+                        <label className="text-[12px] font-bold text-slate-700 mt-1">HS Kodu (GTİP) <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                        <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all", fieldErrors[`item_${idx}_hsCode`] ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                           <span className="mr-3 font-medium text-slate-400 shrink-0">#</span>
                           <div className="flex-1 -ml-3">
                             <HSCodeCombobox value={item.hsCode} onChange={v => updateProformaItem(item.id, "hsCode", v)} productHint={item.productDescription} />
@@ -2062,14 +2054,14 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                         <label className="text-[12px] font-medium text-slate-500">SKU</label>
                         <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white">
                           <Barcode className="mr-3 h-4 w-4 text-slate-400 shrink-0" />
-                          <Input value={item.sku} onChange={e => updateProformaItem(item.id, "sku", e.target.value)} placeholder="Opsiyonel" className="flex-1 border-0 ring-0 shadow-none bg-transparent p-0 text-[14px] font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400" />
+                          <Input value={item.sku} onChange={e => updateProformaItem(item.id, "sku", e.target.value)} placeholder="Örn: Stok Kodu vb. (Opsiyonel)" className="flex-1 border-0 ring-0 shadow-none bg-transparent p-0 text-[14px] font-medium text-slate-700 focus:ring-0 placeholder:text-slate-400" />
                         </div>
                       </div>
 
                       {/* Birim Fiyat */}
                       <div className="sm:col-span-12 lg:col-span-2 flex flex-col gap-2">
-                         <label className="text-[12px] font-medium text-slate-500">Birim Fiyat ({getCurrencySymbol(draft.proformaCurrency)})</label>
-                         <div className="flex items-center h-[52px] rounded-2xl border border-slate-200 px-4 focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-shadow bg-white justify-between">
+                         <label className="text-[12px] font-bold text-slate-700 mt-1">Birim Fiyat ({getCurrencySymbol(draft.proformaCurrency)}) <span className="text-red-500 text-sm ml-0.5">*</span></label>
+                         <div className={cn("flex items-center h-[52px] rounded-2xl border-[1.5px] px-4 focus-within:bg-white focus-within:ring-2 transition-all justify-between", fieldErrors[`item_${idx}_unitPrice`] ? "border-red-500 bg-red-50/30 ring-2 ring-red-100 focus-within:border-red-500 focus-within:ring-red-200" : "border-slate-300 bg-slate-50/50 focus-within:border-brand-500 focus-within:ring-brand-500/20")}>
                           <Input inputMode="decimal" value={item.unitPrice} onChange={e => updateProformaItem(item.id, "unitPrice", e.target.value)} placeholder="0.00" className="w-[60px] border-0 ring-0 shadow-none bg-transparent p-0 text-[15px] font-semibold text-slate-700 focus:ring-0" />
                           <div className="flex flex-col gap-[2px] border-l border-slate-100 pl-2">
                             <button type="button" onClick={() => updateProformaItem(item.id, "unitPrice", String(toNumber(item.unitPrice) + 1))} className="flex h-[18px] w-[24px] items-center justify-center rounded-[6px] bg-[#F1F5F9] hover:bg-[#E2E8F0] text-slate-500 transition-colors"><ChevronUp className="h-3 w-3" /></button>
@@ -2126,7 +2118,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                 <div
                   onDragOver={e => { e.preventDefault(); setDocDragOver(true); }}
                   onDragLeave={() => setDocDragOver(false)}
-                  onDrop={e => { e.preventDefault(); setDocDragOver(false); const file = e.dataTransfer.files?.[0]; if (file) { setDocError(null); setDocSuccess(null); if (file.size > 25*1024*1024) { setDocError("Dosya boyutu 25MB'dan büyük olamaz."); return; } setDocUploading(true); documentService.upload(file, 0, docFileType).then(res => { setDocUploadedFiles(prev => [...prev, { id: res.id, name: res.file_name, type: res.file_type, url: res.url, size: res.file_size }]); setDocSuccess(`"${res.file_name}" başarıyla yüklendi.`); setTimeout(() => setDocSuccess(null), 4000); }).catch((err: any) => setDocError(err?.message || "Yükleme başarısız.")).finally(() => setDocUploading(false)); } }}
+                  onDrop={e => { e.preventDefault(); setDocDragOver(false); const file = e.dataTransfer.files?.[0]; if (file) { setDocError(null); setDocSuccess(null); if (file.size > 25*1024*1024) { setDocError("Dosya boyutu 25MB'dan büyük olamaz."); return; } setDocUploadedFiles(prev => [...prev, { id: crypto.randomUUID(), name: file.name, type: docFileType, url: URL.createObjectURL(file), size: file.size, file: file }]); setDocSuccess(`"${file.name}" eklendi, gönderi tamamlanınca yüklenecek.`); setTimeout(() => setDocSuccess(null), 4000); } }}
                   onClick={() => !docUploading && docInputRef.current?.click()}
                   className={cn(
                     "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-8 cursor-pointer transition-all",
@@ -2136,7 +2128,7 @@ function importPackagesFromExcel(rows: ParsedPackageRow[]) {
                     docUploading && "pointer-events-none opacity-60"
                   )}
                 >
-                  <input ref={docInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={e => { const file = e.target.files?.[0]; if (file) { setDocError(null); setDocSuccess(null); if (file.size > 25*1024*1024) { setDocError("Dosya boyutu 25MB'dan büyük olamaz."); return; } setDocUploading(true); documentService.upload(file, 0, docFileType).then(res => { setDocUploadedFiles(prev => [...prev, { id: res.id, name: res.file_name, type: res.file_type, url: res.url, size: res.file_size }]); setDocSuccess(`"${res.file_name}" başarıyla yüklendi.`); setTimeout(() => setDocSuccess(null), 4000); }).catch((err: any) => setDocError(err?.message || "Yükleme başarısız.")).finally(() => setDocUploading(false)); } e.target.value = ""; }} />
+                  <input ref={docInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" onChange={e => { const file = e.target.files?.[0]; if (file) { setDocError(null); setDocSuccess(null); if (file.size > 25*1024*1024) { setDocError("Dosya boyutu 25MB'dan büyük olamaz."); return; } setDocUploadedFiles(prev => [...prev, { id: crypto.randomUUID(), name: file.name, type: docFileType, url: URL.createObjectURL(file), size: file.size, file: file }]); setDocSuccess(`"${file.name}" eklendi, gönderi tamamlanınca yüklenecek.`); setTimeout(() => setDocSuccess(null), 4000); } e.target.value = ""; }} />
                   {docUploading ? (
                     <>
                       <Loader2 className="h-8 w-8 animate-spin text-[#3959F2]" />

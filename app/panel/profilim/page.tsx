@@ -49,7 +49,7 @@ export default function ProfilPage() {
   const [loadingProfile, setLoadingProfile] = React.useState(true);
 
   const [message, setMessage] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState<typeof TABS[number]["id"]>("hesap");
+  const [activeTab, setActiveTab] = React.useState<string>("hesap");
 
   // Hesap form fields
   const [firstName, setFirstName] = React.useState("");
@@ -537,6 +537,18 @@ export default function ProfilPage() {
             </button>
           );
         })}
+        {profile?.reseller && (
+          <button
+            onClick={() => setActiveTab("bayi")}
+            className={`flex items-center gap-2 px-4 py-2 text-[13px] font-bold rounded-[10px] border transition-all ${
+              activeTab === "bayi"
+                ? "bg-white border-slate-200 text-slate-900 shadow-sm"
+                : "bg-transparent border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            Bayi Bilgileri
+          </button>
+        )}
       </div>
 
       {/* TAB CONTENT */}
@@ -603,6 +615,39 @@ export default function ProfilPage() {
                 {savingProfile ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
                 Hesap Bilgilerini Kaydet
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ BAYİ BİLGİLERİ ═══ */}
+        {activeTab === "bayi" && profile?.reseller && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="bg-white rounded-[16px] border border-slate-200 p-6 shadow-sm flex flex-col gap-6">
+              <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
+                <h2 className="text-[18px] font-bold tracking-tight text-slate-900">Bayi Bilgileri</h2>
+                <p className="text-[13px] text-slate-500 font-medium">Size özel fiyatlandırma ve destek hizmeti sağlayan bayinizin iletişim bilgileri.</p>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="block md:col-span-2">
+                  <div className="mb-2 inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                    <ShieldCheck className="h-4 w-4 text-slate-400" /> Bayi Adı / Şirket Ünvanı
+                  </div>
+                  <Input value={profile.reseller.name} disabled className="h-[44px] rounded-[12px] border-slate-200 bg-slate-50 font-medium text-[14px] text-slate-600" />
+                </label>
+                <label className="block">
+                  <div className="mb-2 inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                    <Mail className="h-4 w-4 text-slate-400" /> E-posta Adresi
+                  </div>
+                  <Input value={profile.reseller.email} disabled className="h-[44px] rounded-[12px] border-slate-200 bg-slate-50 font-medium text-[14px] text-slate-600" />
+                </label>
+                <label className="block">
+                  <div className="mb-2 inline-flex items-center gap-2 text-[13px] font-semibold text-slate-700">
+                    <User className="h-4 w-4 text-slate-400" /> Telefon Numarası
+                  </div>
+                  <Input value={profile.reseller.phone || "Belirtilmemiş"} disabled className="h-[44px] rounded-[12px] border-slate-200 bg-slate-50 font-medium text-[14px] text-slate-600" />
+                </label>
+              </div>
             </div>
           </div>
         )}
